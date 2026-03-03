@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Product Configurator</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<style>
+    body { background-color: #f8f9fa; }
+    .category-card, .item-card { cursor: pointer; transition: transform 0.3s, box-shadow 0.3s; }
+    .category-card:hover, .item-card:hover { transform: scale(1.05); box-shadow: 0 8px 20px rgba(0,0,0,0.15); }
+    .item-card { height: 250px; display: flex; flex-direction: column; justify-content: space-between; text-align: center; padding: 10px; }
+    .item-card img { max-height: 150px; object-fit: cover; width: 100%; border-radius: 4px; }
+    .card-title { margin-top: 10px; font-weight: 500; }
+    /* Make carousel arrows larger and more visible */
+    .carousel-control-prev-icon, .carousel-control-next-icon { filter: invert(1); width: 3rem; height: 3rem; }
+    .carousel-control-prev, .carousel-control-next { width: 10%; }
+    /* Ensure close button always on top */
+    button.position-absolute { touch-action: manipulation; }
+    /* Optional: keep images square and centered */
+    #carouselInner img { max-height: 70vh; max-width: 70vw; object-fit: contain; margin: 0 auto; display: block; }
+    #carouselThumbnails { margin-top: 0.5rem; }
+</style>
+</head>
+<body>
+
+<div class="container mt-5">
+    <h1 class="mb-4 text-center">Dream Home Carpentry and Construction</h1>
+
+    <div id="categories" class="row mb-4"></div>
+
+    <div id="itemsSection" class="d-none">
+        <button class="btn btn-secondary mb-3" onclick="backToCategories()">← Back</button>
+        <h2 id="categoryTitle" class="mb-3"></h2>
+        <div id="items" class="row g-3"></div>
+    </div>
+
+    <div id="details" class="d-none">
+        <button class="btn btn-secondary mb-3" onclick="backToItems()">← Back</button>
+        <h2 id="itemTitle" class="mb-3"></h2>
+        <div id="specs" class="mt-4"></div>
+    </div>
+
+    <div class="mt-5">
+        <h4>Saved Configurations</h4>
+        <ul id="savedList" class="list-group mb-3"></ul>
+        <button class="btn btn-primary" onclick="generatePDF()">Generate PDF</button>
+    </div>
+</div>
+
+<!-- Gallery Modal -->
+<div class="modal fade" id="galleryModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered" style="max-width:90vw;">
+    <div class="modal-content bg-dark p-0 overflow-hidden position-relative">
+
+      <!-- Floating Close Button -->
+      <button type="button"
+              class="position-absolute"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+              style="
+                  top:8px;
+                  right:8px;
+                  width:48px;
+                  height:48px;
+                  border-radius:50%;
+                  background:rgba(255,255,255,0.9);
+                  font-size:24px;
+                  font-weight:bold;
+                  z-index:1055;
+                  border:none;
+                  display:flex;
+                  align-items:center;
+                  justify-content:center;
+              ">
+          ×
+      </button>
+
+      <!-- Carousel -->
+      <div id="carouselIndicators" class="carousel slide" data-bs-ride="carousel">
+        <div class="carousel-inner" id="carouselInner"></div>
+        <button class="carousel-control-prev" type="button" data-bs-target="#carouselIndicators" data-bs-slide="prev">
+          <span class="carousel-control-prev-icon"></span>
+        </button>
+        <button class="carousel-control-next" type="button" data-bs-target="#carouselIndicators" data-bs-slide="next">
+          <span class="carousel-control-next-icon"></span>
+        </button>
+      </div>
+
+      <!-- Thumbnails -->
+      <div id="carouselThumbnails" class="d-flex justify-content-center mt-2 flex-wrap flex-md-nowrap px-2"></div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+const products = {
+    beds: [
+        { name: "Designed Headboard Bed", image: "/images/beds/designed-headboard-bed.webp", gallery: ["/images/beds/designed-headboard-bed.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+        { name: "Rectangular Headboard Bed", image: "/images/beds/rectangular-headboard-bed.webp", gallery: ["/images/beds/rectangular-headboard-bed.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+        { name: "Styled Rectangular Headboard Bed", image: "/images/beds/styled-rectangular-headboard-bed.webp", gallery: ["/images/beds/styled-rectangular-headboard-bed.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] }
+    ],
+
+    "cabinets-and-shelves": [
+        { name: "Black Kitchen Cabinet Set", image: "/images/cabinets-and-shelves/black-kitchen-cabinet-set.webp", gallery: ["/images/cabinets-and-shelves/black-kitchen-cabinet-set.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Corner Cabinet", image: "/images/cabinets-and-shelves/corner-cabinet.webp", gallery: ["/images/cabinets-and-shelves/corner-cabinet.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Full Kitchen Cabinet", image: "/images/cabinets-and-shelves/full-kitchen-cabinet-01.webp", gallery: [
+            "/images/cabinets-and-shelves/full-kitchen-cabinet-01.webp",
+            "/images/cabinets-and-shelves/full-kitchen-cabinet-02.webp"
+        ], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Kitchen Cabinet Set with Appliance Space", image: "/images/cabinets-and-shelves/kitchen-cabinet-set-with-appliance-space.webp", gallery: ["/images/cabinets-and-shelves/kitchen-cabinet-set-with-appliance-space.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Kitchen Cabinet Set with Granite Countertop", image: "/images/cabinets-and-shelves/kitchen-cabinet-set-with-granite-countertop-01.webp", gallery: [
+            "/images/cabinets-and-shelves/kitchen-cabinet-set-with-granite-countertop-01.webp",
+            "/images/cabinets-and-shelves/kitchen-cabinet-set-with-granite-countertop-02.webp",
+            "/images/cabinets-and-shelves/kitchen-cabinet-set-with-granite-countertop-03.webp",
+            "/images/cabinets-and-shelves/kitchen-cabinet-set-with-granite-countertop-04.webp",
+            "/images/cabinets-and-shelves/kitchen-cabinet-set-with-granite-countertop-05.webp"
+        ], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Kitchen Cabinet with Appliance Space", image: "/images/cabinets-and-shelves/kitchen-cabinet-with-appliance-space.webp", gallery: ["/images/cabinets-and-shelves/kitchen-cabinet-with-appliance-space.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Kitchen Cabinet with Granite Countertop", image: "/images/cabinets-and-shelves/kitchen-cabinet-with-granite-countertop-01.webp", gallery: [
+            "/images/cabinets-and-shelves/kitchen-cabinet-with-granite-countertop-01.webp",
+            "/images/cabinets-and-shelves/kitchen-cabinet-with-granite-countertop-02.webp"
+        ], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Kitchen Cabinet with Sink and Appliance Space", image: "/images/cabinets-and-shelves/kitchen-cabinet-with-sink-and-appliance-space.webp", gallery: ["/images/cabinets-and-shelves/kitchen-cabinet-with-sink-and-appliance-space.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Kitchen Drawers", image: "/images/cabinets-and-shelves/kitchen-drawers.webp", gallery: ["/images/cabinets-and-shelves/kitchen-drawers.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Kitchen Island with Granite Countertop", image: "/images/cabinets-and-shelves/kitchen-island-with-granite-countertop-01.webp", gallery: [
+            "/images/cabinets-and-shelves/kitchen-island-with-granite-countertop-01.webp",
+            "/images/cabinets-and-shelves/kitchen-island-with-granite-countertop-02.webp",
+            "/images/cabinets-and-shelves/kitchen-island-with-granite-countertop-03.webp"
+        ], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Kitchen Table with Drawers", image: "/images/cabinets-and-shelves/kitchen-table-with-drawers.webp", gallery: ["/images/cabinets-and-shelves/kitchen-table-with-drawers.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Shelf with Drawers", image: "/images/cabinets-and-shelves/shelf-with-drawers.webp", gallery: ["/images/cabinets-and-shelves/shelf-with-drawers.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Stained Wood Kitchen Cabinet", image: "/images/cabinets-and-shelves/stained-wood-kitchen-cabinet.webp", gallery: ["/images/cabinets-and-shelves/stained-wood-kitchen-cabinet.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] }
+    ],
+
+    carvings: [
+        { name: "Carved Newel Post", image: "/images/carvings/carved-newel-post.webp", gallery: ["/images/carvings/carved-newel-post.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] },
+        { name: "Head Carving with Base", image: "/images/carvings/head-carving-with-base.webp", gallery: ["/images/carvings/head-carving-with-base.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] },
+        { name: "Letter Carvings", image: "/images/carvings/letter-carvings.webp", gallery: ["/images/carvings/letter-carvings.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] },
+        { name: "Mayan Style Carving", image: "/images/carvings/mayan-style-carving.webp", gallery: ["/images/carvings/mayan-style-carving.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] },
+        { name: "Mayan Style Head Carvings", image: "/images/carvings/mayan-style-head-carvings.webp", gallery: ["/images/carvings/mayan-style-head-carvings.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] },
+        { name: "Sun Moon Carving", image: "/images/carvings/sun-moon-carving.webp", gallery: ["/images/carvings/sun-moon-carving.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] },
+        { name: "Totem Carving", image: "/images/carvings/totem-carving.webp", gallery: ["/images/carvings/totem-carving.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] }
+    ],
+
+    "desks-and-tables": [
+        { name: "Corner Desk with Drawers", image: "/images/desks-and-tables/corner-desk-with-drawers-01.webp", gallery: [
+            "/images/desks-and-tables/corner-desk-with-drawers-01.webp",
+            "/images/desks-and-tables/corner-desk-with-drawers-02.webp"
+        ], specs: ['Length (cm)','Width (cm)','Wood Type','Materials'] },
+
+        { name: "Dark Stain Dining Table", image: "/images/desks-and-tables/dark-stain-dining-table.webp", gallery: ["/images/desks-and-tables/dark-stain-dining-table.webp"], specs: ['Length (cm)','Width (cm)','Wood Type','Materials'] },
+
+        { name: "Desk with Drawers", image: "/images/desks-and-tables/desk-with-drawers.webp", gallery: ["/images/desks-and-tables/desk-with-drawers.webp"], specs: ['Length (cm)','Width (cm)','Wood Type','Materials'] },
+
+        { name: "Dining Table Chairs", image: "/images/desks-and-tables/dining-table-chairs.webp", gallery: ["/images/desks-and-tables/dining-table-chairs.webp"], specs: ['Length (cm)','Width (cm)','Wood Type','Materials'] },
+
+        { name: "Matching Bedside Drawers", image: "/images/desks-and-tables/matching-bedside-drawers.webp", gallery: ["/images/desks-and-tables/matching-bedside-drawers.webp"], specs: ['Length (cm)','Width (cm)','Wood Type','Materials'] }
+    ],
+
+    doors: [
+        { name: "Arched Entrance Door", image: "/images/doors/arched-entrance-door.webp", gallery: ["/images/doors/arched-entrance-door.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Style 01 Wooden Door", image: "/images/doors/style-01-wooden-door.webp", gallery: ["/images/doors/style-01-wooden-door.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Style 02 Wooden Door", image: "/images/doors/style-02-wooden-door.webp", gallery: ["/images/doors/style-02-wooden-door.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Style 03 Wooden Door", image: "/images/doors/style-03-wooden-door.webp", gallery: ["/images/doors/style-03-wooden-door.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Traditional Style Door", image: "/images/doors/traditional-style-door-01.webp", gallery: [
+            "/images/doors/traditional-style-door-01.webp",
+            "/images/doors/traditional-style-door-02.webp"
+        ], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Wooden Door with Carvings", image: "/images/doors/wooden-door-with-carvings.webp", gallery: ["/images/doors/wooden-door-with-carvings.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Wooden Entrance Door with Side Panels", image: "/images/doors/wooden-entrance-door-with-side-panels.webp", gallery: ["/images/doors/wooden-entrance-door-with-side-panels.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Wooden Entrance Door with Sidelights", image: "/images/doors/wooden-entrance-door-with-sidelights.webp", gallery: ["/images/doors/wooden-entrance-door-with-sidelights.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Wooden Security Door", image: "/images/doors/wooden-security-door.webp", gallery: ["/images/doors/wooden-security-door.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] }
+    ],
+
+    dressers: [
+        { name: "Dresser with Mirror", image: "/images/dressers/dresser-with-mirror.webp", gallery: ["/images/dressers/dresser-with-mirror.webp"], specs: ['Width (cm)','Height (cm)','Color','Material'] }
+    ],
+
+    fixtures: [
+        { name: "Bedside Lamp", image: "/images/fixtures/bedside-lamp.webp", gallery: ["/images/fixtures/bedside-lamp.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] }
+    ],
+
+    stairs: [
+        { name: "Railings with Carved Balusters", image: "/images/stairs/railings-with-carved-balusters.webp", gallery: ["/images/stairs/railings-with-carved-balusters.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Wooden Railings and Stairs", image: "/images/stairs/wooden-railings-and-stairs.webp", gallery: ["/images/stairs/wooden-railings-and-stairs.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] },
+
+        { name: "Wooden Stairs with Balcony", image: "/images/stairs/wooden-stairs-with-balcony.webp", gallery: ["/images/stairs/wooden-stairs-with-balcony.webp"], specs: ['Length (cm)','Height (cm)','Color','Material'] }
+    ],
+
+    vanities: [
+        { name: "Bathroom Vanity with Drawers", image: "/images/vanities/bathroom-vanity-with-drawers.webp", gallery: ["/images/vanities/bathroom-vanity-with-drawers.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Bathroom Vanity with Dual Sinks", image: "/images/vanities/bathroom-vanity-with-dual-sinks.webp", gallery: ["/images/vanities/bathroom-vanity-with-dual-sinks.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Bathroom Vanity with Shelving Unit", image: "/images/vanities/bathroom-vanity-with-shelving-unit.webp", gallery: ["/images/vanities/bathroom-vanity-with-shelving-unit.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Bathroom Vanity with Storage Cabinet", image: "/images/vanities/bathroom-vanity-with-storage-cabinet.webp", gallery: ["/images/vanities/bathroom-vanity-with-storage-cabinet.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Black Bathroom Vanity", image: "/images/vanities/black-bathroom-vanity.webp", gallery: ["/images/vanities/black-bathroom-vanity.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Vanity with Granite Countertop", image: "/images/vanities/vanity-with-granite-countertop.webp", gallery: ["/images/vanities/vanity-with-granite-countertop.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] },
+
+        { name: "Wooden Bathroom Vanity", image: "/images/vanities/wooden-bathroom-vanity.webp", gallery: ["/images/vanities/wooden-bathroom-vanity.webp"], specs: ['Width (cm)','Height (cm)','Frame Color','Material'] }
+    ]
+};
+
+let configurations = [];
+let currentCategory = null;
+let currentItemIndex = null;
+
+function showCategories() {
+    document.getElementById('categories').classList.remove('d-none');
+    document.getElementById('itemsSection').classList.add('d-none');
+    document.getElementById('details').classList.add('d-none');
+
+    document.getElementById('categories').innerHTML = Object.keys(products).map(cat =>
+        `<div class="col-md-4 mb-3">
+            <div class="card category-card p-4 text-center" onclick="selectCategory('${cat}')">
+                <h5>${formatCategoryName(cat)}</h5>
+            </div>
+        </div>`).join('');
+}
+
+function selectCategory(category) {
+    currentCategory = category;
+    document.getElementById('categoryTitle').textContent = formatCategoryName(category);
+    const items = products[category];
+
+    document.getElementById('items').innerHTML = items.map((item,i) => `
+        <div class="col-md-4">
+            <div class="card item-card" onclick="selectItem(${i})">
+                <img src="${item.image}">
+                <div class="card-title">${item.name}</div>
+            </div>
+        </div>
+    `).join('');
+
+    document.getElementById('itemsSection').classList.remove('d-none');
+    document.getElementById('categories').classList.add('d-none');
+}
+
+function backToCategories() { showCategories(); }
+
+function backToItems() {
+    selectCategory(currentCategory);
+    document.getElementById('details').classList.add('d-none');
+}
+
+function selectItem(index) {
+    currentItemIndex = index;
+    const item = products[currentCategory][index];
+    document.getElementById('itemTitle').textContent = item.name;
+
+    document.getElementById('specs').innerHTML = `
+    <form id="specForm">
+        ${item.specs.map(spec => {
+            if(spec==='Materials'){
+                return `
+                <div class="mb-3">
+                    <label class="form-label">${spec}</label><br>
+                    <input type="checkbox" name="${spec}" value="Glass"> Glass
+                    <input type="checkbox" name="${spec}" value="Metal"> Metal
+                    <input type="checkbox" name="${spec}" value="Wood"> Wood
+                </div>`;
+            } else if(spec==='Wood Type'){
+                return `
+                <div class="mb-3">
+                    <label class="form-label">${spec}</label>
+                    <select class="form-select" name="${spec}">
+                        <option>Oak</option>
+                        <option>Mahogany</option>
+                        <option>Pine</option>
+                    </select>
+                </div>`;
+            } else {
+                return `
+                <div class="mb-3">
+                    <label class="form-label">${spec}</label>
+                    <input type="text" class="form-control" name="${spec}" required>
+                </div>`;
+            }
+        }).join('')}
+
+        <button type="button" class="btn btn-success mb-2" onclick="saveConfiguration()">
+            Save Configuration
+        </button>
+
+        ${item.gallery && item.gallery.length > 0 ? `
+            <button type="button" class="btn btn-info ms-2 mb-2" onclick="openGallery()">
+                View Gallery
+            </button>
+        ` : ''}
+    </form>`;
+
+    document.getElementById('details').classList.remove('d-none');
+    document.getElementById('itemsSection').classList.add('d-none');
+}
+
+// --- SAVE CONFIGURATION AND SHOW AT BOTTOM ---
+function saveConfiguration() {
+    const item = products[currentCategory][currentItemIndex];
+    const form = document.getElementById('specForm');
+    const formData = new FormData(form);
+    let specData = {};
+
+    item.specs.forEach(spec => {
+        if(spec === 'Materials'){
+            const checked = form.querySelectorAll(`input[name="${spec}"]:checked`);
+            specData[spec] = Array.from(checked).map(cb => cb.value);
+        } else {
+            specData[spec] = formData.get(spec);
+        }
+    });
+
+    // Remove old config of same type
+    configurations = configurations.filter(c => c.type !== item.name);
+    configurations.push({ type: item.name, specs: specData });
+
+    updateSavedList();
+    backToItems();
+}
+
+function updateSavedList() {
+    const list = document.getElementById('savedList');
+    list.innerHTML = '';
+    configurations.forEach(config => {
+        const li = document.createElement('li');
+        li.className = "list-group-item";
+        li.innerHTML = `<strong>${config.type}</strong><br>` + Object.entries(config.specs).map(([k,v]) => {
+            return Array.isArray(v) ? `${k}: ${v.join(', ')}` : `${k}: ${v}`;
+        }).join('<br>');
+        list.appendChild(li);
+    });
+}
+
+// --- PDF GENERATION WITH LOGO ---
+function generatePDF() {
+    if(configurations.length===0){
+        alert("No configurations saved.");
+        return;
+    }
+
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const img = new Image();
+    img.src = "images/logo.png"; // adjust your logo path
+
+    img.onload = function() {
+        const imgWidth = 60;
+        const imgHeight = (img.height * imgWidth) / img.width;
+        const x = (pageWidth - imgWidth) / 2;
+        const yLogo = 15;
+
+        doc.addImage(img, "PNG", x, yLogo, imgWidth, imgHeight);
+
+        let y = yLogo + imgHeight + 15;
+        doc.setFontSize(16);
+        doc.text("Product Configuration Summary", pageWidth/2, y, { align: "center" });
+        y += 15;
+
+        configurations.forEach(config => {
+            doc.setFontSize(14);
+            doc.text(config.type,10,y); y += 8;
+            doc.setFontSize(12);
+            Object.entries(config.specs).forEach(([k,v]) => {
+                let text = Array.isArray(v) ? v.join(', ') : v;
+                doc.text(`${k}: ${text}`,12,y); y+=7;
+            });
+            y+=8;
+        });
+
+        doc.setFontSize(10);
+        doc.text(`Date: ${new Date().toLocaleDateString()}`,10,y);
+
+        doc.save("Product_Configurations.pdf");
+    };
+}
+
+// --- GALLERY ---
+function openGallery() {
+    const item = products[currentCategory][currentItemIndex];
+    const carouselInner = document.getElementById('carouselInner');
+    const thumbnailsDiv = document.getElementById('carouselThumbnails');
+
+    carouselInner.innerHTML = item.gallery.map((url,i)=>`
+        <div class="carousel-item ${i===0?'active':''}">
+            <div class="d-flex justify-content-center align-items-center" 
+                 style="height:85vh;">
+                <img src="${url}" 
+                     class="img-fluid"
+                     style="max-height:100%; object-fit:contain;">
+            </div>
+        </div>
+    `).join('');
+
+    thumbnailsDiv.innerHTML = item.gallery.map((url,i)=>`
+        <img src="${url}" 
+             class="img-thumbnail m-1" 
+             style="width:80px; height:60px; object-fit:cover; cursor:pointer;" 
+             onclick="goToSlide(${i})">
+    `).join('');
+
+    new bootstrap.Modal(document.getElementById('galleryModal')).show();
+}
+
+function goToSlide(index) {
+    const carousel = bootstrap.Carousel.getOrCreateInstance(document.getElementById('carouselIndicators'));
+    carousel.to(index);
+}
+
+function formatCategoryName(category) {
+    return category
+        .replace(/-/g, ' ')
+        .replace(/\b\w+/g, word => {
+            if (word.toLowerCase() === 'and') return 'and';
+            return word.charAt(0).toUpperCase() + word.slice(1);
+        });
+}
+
+// --- INIT ---
+showCategories();
+</script>
+
+</body>
+</html>
